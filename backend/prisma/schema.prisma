@@ -1,0 +1,396 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AssignmentStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+  LATE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      Role
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student?
+  teacher Teacher?
+  activityLogs ActivityLog[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Student {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  enrollmentNo    String   @unique
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime
+  gender          Gender
+  phone           String
+  address         String
+  city            String
+  state           String
+  pincode         String
+  parentName      String
+  parentPhone     String
+  parentEmail     String?
+  bloodGroup      String?
+  photo           String?
+  
+  classId         String?
+  class           Class?   @relation(fields: [classId], references: [id], onDelete: SetNull)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  marks           Mark[]
+  attendance      Attendance[]
+  submissions     AssignmentSubmission[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  employeeId      String   @unique
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime
+  gender          Gender
+  phone           String
+  address         String
+  city            String
+  state           String
+  pincode         String
+  qualification   String
+  experience      Int
+  joiningDate     DateTime
+  photo           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subjects        Subject[]
+  classes         Class[]
+  announcements   Announcement[]
+  assignments     Assignment[]
+  marks           Mark[]
+  attendance      Attendance[]
+  syllabuses      CourseSyllabus[]
+
+  @@map("teachers")
+}
+
+model Course {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?
+  duration    Int      // in semesters
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subjects    Subject[]
+  classes     Class[]
+  syllabuses  CourseSyllabus[]
+
+  @@map("courses")
+}
+
+model CourseSyllabus {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  fileUrl     String   // Path to uploaded file
+  fileName    String
+  fileSize    Int      // in bytes
+  mimeType    String   // e.g., application/pdf
+  
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("course_syllabuses")
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?
+  credits     Int
+  semester    Int
+  
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  teacherId   String?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  marks       Mark[]
+  assignments Assignment[]
+  materials   Material[]
+
+  @@map("subjects")
+}
+
+model Class {
+  id          String   @id @default(uuid())
+  name        String
+  section     String
+  semester    Int
+  academicYear String
+  
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  teacherId   String?  // Class Teacher
+  teacher     Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  students    Student[]
+  attendance  Attendance[]
+  timetable   Timetable[]
+
+  @@unique([courseId, section, semester, academicYear])
+  @@map("classes")
+}
+
+model Mark {
+  id          String   @id @default(uuid())
+  
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  examType    String   // Internal, Mid-term, End-term, etc.
+  totalMarks  Float
+  obtainedMarks Float
+  grade       String?
+  remarks     String?
+  
+  academicYear String
+  semester    Int
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([studentId, subjectId, examType, academicYear, semester])
+  @@map("marks")
+}
+
+model Attendance {
+  id          String   @id @default(uuid())
+  
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  date        DateTime
+  status      AttendanceStatus
+  remarks     String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([studentId, classId, date])
+  @@map("attendance")
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  
+  title       String
+  description String
+  dueDate     DateTime
+  totalMarks  Float
+  
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  attachments String[] // File paths
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  submissions AssignmentSubmission[]
+
+  @@map("assignments")
+}
+
+model AssignmentSubmission {
+  id          String   @id @default(uuid())
+  
+  assignmentId String
+  assignment  Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  status      AssignmentStatus @default(PENDING)
+  submittedAt DateTime?
+  attachments String[] // File paths
+  remarks     String?
+  
+  obtainedMarks Float?
+  feedback    String?
+  gradedAt    DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([assignmentId, studentId])
+  @@map("assignment_submissions")
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  
+  title       String
+  content     String
+  priority    String   @default("normal") // low, normal, high, urgent
+  targetRole  Role?    // null means all
+  
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  
+  expiresAt   DateTime?
+  attachments String[] // File paths
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model Material {
+  id          String   @id @default(uuid())
+  
+  title       String
+  description String?
+  fileUrl     String
+  fileType    String
+  fileSize    Int
+  
+  subjectId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("materials")
+}
+
+model Timetable {
+  id          String   @id @default(uuid())
+  
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  
+  dayOfWeek   Int      // 1-7 (Monday-Sunday)
+  startTime   String   // HH:MM format
+  endTime     String   // HH:MM format
+  subjectCode String
+  room        String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("timetable")
+}
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT
+  entity      String   // User, Student, Teacher, etc.
+  entityId    String?
+  description String
+  ipAddress   String?
+  userAgent   String?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("activity_logs")
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token       String   @unique
+  expiresAt   DateTime
+  
+  createdAt   DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
